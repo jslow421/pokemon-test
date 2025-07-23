@@ -15,12 +15,12 @@ func main() {
 	
 	// Protected endpoints (Cognito auth required)
 	http.HandleFunc("/bedrock", middleware.CognitoAuthMiddleware(handlers.BedrockHandler))
-	http.HandleFunc("/pokemon-species/", middleware.CognitoAuthMiddleware(handlers.PokemonSpeciesHandler))
+	http.HandleFunc("/pokemon/", middleware.CognitoAuthMiddleware(handlers.PokemonHandler))
 
 	log.Println("Server starting on port 8181...")
 	log.Println("Using hardcoded Cognito configuration for demo")
 	log.Println("Available endpoints:")
-	log.Println("  GET /pokemon-species/{id_or_name} - Get Pokemon species data (authenticated)")
+	log.Println("  GET /pokemon/{id_or_name} - Get Pokemon data (authenticated)")
 	if err := http.ListenAndServe(":8181", nil); err != nil {
 		log.Fatal(err)
 	}

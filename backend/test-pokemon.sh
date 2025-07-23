@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Testing Pokemon Species Endpoint"
+echo "Testing Pokemon Endpoint"
 
 echo "1. Login to get JWT token..."
 RESPONSE=$(curl -X POST http://localhost:8181/login \
@@ -18,21 +18,21 @@ fi
 
 echo "Token received: ${TOKEN:0:20}..."
 
-echo -e "\n2. Test Pokemon species endpoint with Pikachu..."
-curl -X GET http://localhost:8181/pokemon-species/pikachu \
+echo -e "\n2. Test Pokemon endpoint with Pikachu..."
+curl -X GET http://localhost:8181/pokemon/pikachu \
   -H "Authorization: Bearer $TOKEN" \
   -s | jq '.data.name // .error'
 
-echo -e "\n3. Test Pokemon species endpoint with Charizard..."
-curl -X GET http://localhost:8181/pokemon-species/charizard \
+echo -e "\n3. Test Pokemon endpoint with Charizard..."
+curl -X GET http://localhost:8181/pokemon/charizard \
   -H "Authorization: Bearer $TOKEN" \
   -s | jq '.data.name // .error'
 
 echo -e "\n4. Test with invalid Pokemon..."
-curl -X GET http://localhost:8181/pokemon-species/invalidpokemon \
+curl -X GET http://localhost:8181/pokemon/invalidpokemon \
   -H "Authorization: Bearer $TOKEN" \
   -s | jq '.error // .data'
 
 echo -e "\n5. Test without authentication..."
-curl -X GET http://localhost:8181/pokemon-species/pikachu \
+curl -X GET http://localhost:8181/pokemon/pikachu \
   -s | jq '.error // .message'
