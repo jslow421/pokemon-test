@@ -24,11 +24,17 @@ type PokifyResponse struct {
 // Maximum file size (5MB)
 const maxFileSize = 5 * 1024 * 1024
 
+// MIME type constants
+const (
+	mimeJPEG = "image/jpeg"
+	mimePNG  = "image/png"
+)
+
 // Allowed image types
 var allowedTypes = map[string]bool{
-	"image/jpeg": true,
-	"image/jpg":  true,
-	"image/png":  true,
+	mimeJPEG: true,
+	"image/jpg": true,
+	mimePNG:  true,
 }
 
 // PokifyHandler handles image upload and Pokemon character generation
@@ -106,12 +112,12 @@ func PokifyHandler(w http.ResponseWriter, r *http.Request) {
 	// Determine media type for Bedrock
 	var mediaType string
 	switch contentType {
-	case "image/jpeg", "image/jpg":
-		mediaType = "image/jpeg"
-	case "image/png":
-		mediaType = "image/png"
+	case mimeJPEG, "image/jpg":
+		mediaType = mimeJPEG
+	case mimePNG:
+		mediaType = mimePNG
 	default:
-		mediaType = "image/jpeg" // fallback
+		mediaType = mimeJPEG // fallback
 	}
 
 	log.Printf("Processing image: %s, size: %d bytes", contentType, len(fileBytes))
@@ -131,7 +137,7 @@ func PokifyHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Pokify response sent: 200 OK")
 }
 
-// generatePokemonCharacter calls AWS Bedrock to generate a Pokemon character from the uploaded image
+// generatePokemonCharacter calls AWS Bedrock Titan Image Generator to generate a Pokemon character from the uploaded image
 func generatePokemonCharacter(base64Image, mediaType string) (string, error) {
 	// Initialize AWS config
 	cfg, err := awsconfig.LoadDefaultConfig(context.TODO())
@@ -142,48 +148,27 @@ func generatePokemonCharacter(base64Image, mediaType string) (string, error) {
 	// Create Bedrock client
 	client := bedrockruntime.NewFromConfig(cfg)
 
-	// Get Bedrock configuration
-	bedrockConfig := config.DefaultBedrockConfig()
-
-	// Updated max tokens for image generation
-	bedrockConfig.MaxTokens = 4000
+	// Get Titan Image Generator configuration
+	bedrockConfig := config.TitanImageConfig()
 
 	// Prepare the prompt for Pokemon character generation
-	prompt := `You are an expert Pokémon character designer. I'm providing you with an image. Please create a new Pokémon character that is clearly inspired by this image while maintaining the official Pokémon art style.
+	prompt := "Create a new Pokemon character inspired by this image. The Pokemon should have the official Pokemon art style - clean, vibrant, cartoon-like with bold outlines. Make it look friendly and approachable. Include unique characteristics that reflect the image's appearance while maintaining the Pokemon aesthetic."
 
-Requirements:
-- The Pokémon should be recognizably inspired by the thing in the image (similar colors, distinctive features, overall aesthetic)
-- Use the official Pokémon art style - clean, vibrant, cartoon-like with bold outlines
-- Create an original Pokémon design, not an existing one
-- The character should look friendly and approachable like most Pokémon
-- Include some unique characteristics that reflect the thing's appearance
-- Generate at a reasonable resolution (not too large for web display)
-- Make it clear this is a Pokémon-style creature, not just a cartoon version of the thing
-
-Please generate the Pokémon character image inspired by the uploaded photo.`
-
-	// Prepare the request for Claude Sonnet with image input
+	// Prepare the request for Titan Image Generator with conditioning image
 	bedrockReq := map[string]interface{}{
-		"anthropic_version": bedrockConfig.AnthropicVersion,
-		"max_tokens":        bedrockConfig.MaxTokens,
-		"messages": []map[string]interface{}{
-			{
-				"role": "user",
-				"content": []map[string]interface{}{
-					{
-						"type": "image",
-						"source": map[string]interface{}{
-							"type":       "base64",
-							"media_type": mediaType,
-							"data":       base64Image,
-						},
-					},
-					{
-						"type": "text",
-						"text": prompt,
-					},
-				},
-			},
+		"taskType": "IMAGE_VARIATION",
+		"imageVariationParams": map[string]interface{}{
+			"text": prompt,
+			"images": []string{base64Image},
+			"similarityStrength": 0.7,
+		},
+		"imageGenerationConfig": map[string]interface{}{
+			"numberOfImages":   1,
+			"quality":          "premium",
+			"cfgScale":         8.0,
+			"height":           1024,
+			"width":            1024,
+			"seed":             0,
 		},
 	}
 
@@ -192,7 +177,7 @@ Please generate the Pokémon character image inspired by the uploaded photo.`
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	log.Printf("Calling Bedrock with image generation request...")
+	log.Printf("Calling Bedrock Titan Image Generator with image variation request...")
 
 	// Call Bedrock
 	output, err := client.InvokeModel(context.TODO(), &bedrockruntime.InvokeModelInput{
@@ -211,31 +196,13 @@ Please generate the Pokémon character image inspired by the uploaded photo.`
 		return "", fmt.Errorf("failed to parse Bedrock response: %w", err)
 	}
 
-	// Extract the generated image
-	if content, ok := bedrockResp["content"].([]interface{}); ok && len(content) > 0 {
-		for _, item := range content {
-			if contentItem, ok := item.(map[string]interface{}); ok {
-				if contentType, ok := contentItem["type"].(string); ok && contentType == "image" {
-					if source, ok := contentItem["source"].(map[string]interface{}); ok {
-						if imageData, ok := source["data"].(string); ok {
-							log.Printf("Successfully generated Pokemon character image")
-							return imageData, nil
-						}
-					}
-				}
-			}
+	// Extract the generated image from Titan response
+	if images, ok := bedrockResp["images"].([]interface{}); ok && len(images) > 0 {
+		if imageData, ok := images[0].(string); ok {
+			log.Printf("Successfully generated Pokemon character image with Titan")
+			return imageData, nil
 		}
 	}
 
-	// If no image found in response, check for text response as fallback
-	if content, ok := bedrockResp["content"].([]interface{}); ok && len(content) > 0 {
-		if firstContent, ok := content[0].(map[string]interface{}); ok {
-			if text, ok := firstContent["text"].(string); ok {
-				log.Printf("Bedrock returned text response instead of image: %s", text)
-				return "", fmt.Errorf("Bedrock did not generate an image. Response: %s", text)
-			}
-		}
-	}
-
-	return "", fmt.Errorf("no image found in Bedrock response")
+	return "", fmt.Errorf("no image found in Titan response")
 }
