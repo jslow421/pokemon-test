@@ -1,12 +1,14 @@
 import * as cdk from "aws-cdk-lib";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
 
 export class SlowikPokeInfraStack extends cdk.Stack {
   public readonly userPool: cognito.UserPool;
   public readonly userPoolClient: cognito.UserPoolClient;
   public readonly pokemonTable: dynamodb.Table;
+  public readonly bedrockRole: iam.Role;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -96,7 +98,7 @@ export class SlowikPokeInfraStack extends cdk.Stack {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For development
-      pointInTimeRecovery: false, // Optional: disable for cost savings in dev
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: false }, // Optional: disable for cost savings in dev
     });
 
     // Add Global Secondary Index for category-based queries
@@ -122,6 +124,37 @@ export class SlowikPokeInfraStack extends cdk.Stack {
     new cdk.CfnOutput(this, "PokemonTableArn", {
       value: this.pokemonTable.tableArn,
       description: "Pokemon entries table ARN",
+    });
+
+    // Create IAM role for Bedrock on-demand access
+    this.bedrockRole = new iam.Role(this, "BedrockExecutionRole", {
+      roleName: "pokemon-bedrock-execution-role",
+      assumedBy: new iam.CompositePrincipal(
+        new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+        new iam.ServicePrincipal("lambda.amazonaws.com")
+      ),
+      inlinePolicies: {
+        BedrockInvokeModel: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                "bedrock:InvokeModel",
+                "bedrock:InvokeModelWithResponseStream",
+              ],
+              resources: [
+                "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0",
+              ],
+            }),
+          ],
+        }),
+      },
+    });
+
+    // Output Bedrock configuration
+    new cdk.CfnOutput(this, "BedrockRoleArn", {
+      value: this.bedrockRole.roleArn,
+      description: "IAM Role ARN for Bedrock on-demand access",
     });
 
     cdk.Tags.of(this).add("Caylent:Owner", "john.slowik@caylent.com");

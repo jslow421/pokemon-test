@@ -11,8 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"backend/config"
 	"backend/middleware"
-	"github.com/aws/aws-sdk-go-v2/config"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -232,7 +233,7 @@ func SavePokemonHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("User %s saving Pokemon: %s in category: %s", user.Username, req.PokemonName, req.Category)
 
 	// Initialize AWS config
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	cfg, err := awsconfig.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		log.Printf("Error loading AWS config: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -327,7 +328,7 @@ func GetPokemonCollectionHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("User %s requesting Pokemon collection, category filter: %s", user.Username, category)
 
 	// Initialize AWS config
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	cfg, err := awsconfig.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		log.Printf("Error loading AWS config: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -454,7 +455,7 @@ func DeletePokemonHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("User %s deleting Pokemon entry: %s", user.Username, entryId)
 
 	// Initialize AWS config
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	cfg, err := awsconfig.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		log.Printf("Error loading AWS config: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -595,7 +596,7 @@ func PokemonIdentifyHandler(w http.ResponseWriter, r *http.Request) {
 
 func identifyPokemon(imageBytes []byte) (string, float64, error) {
 	// Initialize AWS config
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	cfg, err := awsconfig.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to load AWS config: %w", err)
 	}
@@ -606,7 +607,10 @@ func identifyPokemon(imageBytes []byte) (string, float64, error) {
 	// Convert image to base64
 	imageBase64 := base64.StdEncoding.EncodeToString(imageBytes)
 
-	// Prepare the request for Claude 3.5 Sonnet with vision
+	// Get Bedrock configuration
+	bedrockConfig := config.DefaultBedrockConfig()
+	
+	// Prepare the request for Claude Sonnet with vision
 	prompt := `Analyze this image and identify the Pokémon. Respond with JSON only:
 
 {
@@ -620,8 +624,8 @@ Rules:
 - Consider regional forms (e.g., "alolan-raichu")`
 
 	bedrockReq := map[string]interface{}{
-		"anthropic_version": "bedrock-2023-05-31",
-		"max_tokens":        1000,
+		"anthropic_version": bedrockConfig.AnthropicVersion,
+		"max_tokens":        bedrockConfig.MaxTokens,
 		"messages": []map[string]interface{}{
 			{
 				"role": "user",
@@ -651,8 +655,8 @@ Rules:
 	// Call Bedrock
 	output, err := client.InvokeModel(context.TODO(), &bedrockruntime.InvokeModelInput{
 		Body:        reqBody,
-		ModelId:     stringPtr("anthropic.claude-3-5-sonnet-20241022-v2:0"),
-		ContentType: stringPtr("application/json"),
+		ModelId:     stringPtr(bedrockConfig.ModelID),
+		ContentType: stringPtr(bedrockConfig.ContentType),
 	})
 
 	if err != nil {

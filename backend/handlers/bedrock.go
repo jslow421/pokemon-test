@@ -6,7 +6,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/aws/aws-sdk-go-v2/config"
+	"backend/config"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 )
 
@@ -49,7 +50,7 @@ func BedrockHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received message: %s", req.Message)
 
 	// Initialize AWS config
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	cfg, err := awsconfig.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		log.Printf("Error loading AWS config: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -60,10 +61,13 @@ func BedrockHandler(w http.ResponseWriter, r *http.Request) {
 	// Create Bedrock client
 	client := bedrockruntime.NewFromConfig(cfg)
 
+	// Get Bedrock configuration
+	bedrockConfig := config.DefaultBedrockConfig()
+	
 	// Prepare the request for Claude Sonnet
 	bedrockReq := map[string]interface{}{
-		"anthropic_version": "bedrock-2023-05-31",
-		"max_tokens":        1000,
+		"anthropic_version": bedrockConfig.AnthropicVersion,
+		"max_tokens":        bedrockConfig.MaxTokens,
 		"messages": []map[string]string{
 			{
 				"role":    "user",
@@ -80,11 +84,11 @@ func BedrockHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Call Bedrock
+	// Call Bedrock with on-demand model access
 	output, err := client.InvokeModel(context.TODO(), &bedrockruntime.InvokeModelInput{
 		Body:        reqBody,
-		ModelId:     stringPtr("anthropic.claude-3-sonnet-20240229-v1:0"),
-		ContentType: stringPtr("application/json"),
+		ModelId:     stringPtr(bedrockConfig.ModelID),
+		ContentType: stringPtr(bedrockConfig.ContentType),
 	})
 
 	if err != nil {
