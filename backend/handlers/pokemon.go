@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 const (
@@ -41,18 +42,23 @@ type SavePokemonResponse struct {
 	Error   string `json:"error,omitempty"`
 }
 
+type GetPokemonCollectionResponse struct {
+	Pokemon []PokemonEntry `json:"pokemon,omitempty"`
+	Error   string         `json:"error,omitempty"`
+}
+
 type PokemonEntry struct {
-	UserId       string    `dynamodbav:"userId"`
-	EntryId      string    `dynamodbav:"entryId"`
-	PokemonName  string    `dynamodbav:"pokemonName"`
-	PokemonId    int       `dynamodbav:"pokemonId"`
-	Category     string    `dynamodbav:"category"`
-	Notes        string    `dynamodbav:"notes"`
-	Types        []string  `dynamodbav:"types"`
-	SpriteUrl    string    `dynamodbav:"spriteUrl"`
-	UserCategory string    `dynamodbav:"userCategory"`
-	CreatedAt    string    `dynamodbav:"createdAt"`
-	UpdatedAt    string    `dynamodbav:"updatedAt"`
+	UserId       string    `json:"userId" dynamodbav:"userId"`
+	EntryId      string    `json:"entryId" dynamodbav:"entryId"`
+	PokemonName  string    `json:"pokemonName" dynamodbav:"pokemonName"`
+	PokemonId    int       `json:"pokemonId" dynamodbav:"pokemonId"`
+	Category     string    `json:"category" dynamodbav:"category"`
+	Notes        string    `json:"notes" dynamodbav:"notes"`
+	Types        []string  `json:"types" dynamodbav:"types"`
+	SpriteUrl    string    `json:"spriteUrl" dynamodbav:"spriteUrl"`
+	UserCategory string    `json:"userCategory" dynamodbav:"userCategory"`
+	CreatedAt    string    `json:"createdAt" dynamodbav:"createdAt"`
+	UpdatedAt    string    `json:"updatedAt" dynamodbav:"updatedAt"`
 }
 
 func PokemonHandler(w http.ResponseWriter, r *http.Request) {
@@ -269,4 +275,123 @@ func SavePokemonHandler(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		EntryId: entryId,
 	})
+}
+
+func GetPokemonCollectionHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Request received: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+
+	// Set CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(GetPokemonCollectionResponse{Error: "Method not allowed"})
+		return
+	}
+
+	// Get the user from context (set by auth middleware)
+	user, ok := r.Context().Value(middleware.CognitoUserContextKey).(middleware.CognitoUser)
+	if !ok {
+		log.Printf("No user found in context")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(GetPokemonCollectionResponse{Error: "Authentication required"})
+		return
+	}
+
+	// Get optional category filter from query parameters
+	category := r.URL.Query().Get("category")
+
+	log.Printf("User %s requesting Pokemon collection, category filter: %s", user.Username, category)
+
+	// Initialize AWS config
+	cfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		log.Printf("Error loading AWS config: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(GetPokemonCollectionResponse{Error: "Failed to load AWS config"})
+		return
+	}
+
+	// Create DynamoDB client
+	dynamoClient := dynamodb.NewFromConfig(cfg)
+	tableName := TableName
+
+	var pokemon []PokemonEntry
+
+	if category != "" {
+		// Query by category using GSI
+		userCategory := fmt.Sprintf("USER#%s#CATEGORY#%s", user.Sub, category)
+		
+		queryInput := &dynamodb.QueryInput{
+			TableName:              &tableName,
+			IndexName:              stringPtr("CategoryIndex"),
+			KeyConditionExpression: stringPtr("userCategory = :userCategory"),
+			ExpressionAttributeValues: map[string]types.AttributeValue{
+				":userCategory": &types.AttributeValueMemberS{Value: userCategory},
+			},
+			ScanIndexForward: boolPtr(false), // Sort by createdAt descending (newest first)
+		}
+
+		result, err := dynamoClient.Query(context.TODO(), queryInput)
+		if err != nil {
+			log.Printf("Error querying DynamoDB by category: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(GetPokemonCollectionResponse{Error: "Failed to query Pokemon collection"})
+			return
+		}
+
+		// Unmarshal results
+		err = attributevalue.UnmarshalListOfMaps(result.Items, &pokemon)
+		if err != nil {
+			log.Printf("Error unmarshaling DynamoDB items: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(GetPokemonCollectionResponse{Error: "Failed to process Pokemon collection"})
+			return
+		}
+	} else {
+		// Query all Pokemon for user
+		queryInput := &dynamodb.QueryInput{
+			TableName:              &tableName,
+			KeyConditionExpression: stringPtr("userId = :userId"),
+			ExpressionAttributeValues: map[string]types.AttributeValue{
+				":userId": &types.AttributeValueMemberS{Value: user.Sub},
+			},
+			ScanIndexForward: boolPtr(false), // Sort by entryId descending (newest first)
+		}
+
+		result, err := dynamoClient.Query(context.TODO(), queryInput)
+		if err != nil {
+			log.Printf("Error querying DynamoDB: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(GetPokemonCollectionResponse{Error: "Failed to query Pokemon collection"})
+			return
+		}
+
+		// Unmarshal results
+		err = attributevalue.UnmarshalListOfMaps(result.Items, &pokemon)
+		if err != nil {
+			log.Printf("Error unmarshaling DynamoDB items: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(GetPokemonCollectionResponse{Error: "Failed to process Pokemon collection"})
+			return
+		}
+	}
+
+	log.Printf("Successfully retrieved %d Pokemon for user: %s", len(pokemon), user.Username)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(GetPokemonCollectionResponse{
+		Pokemon: pokemon,
+	})
+}
+
+// Helper functions
+func boolPtr(b bool) *bool {
+	return &b
 }

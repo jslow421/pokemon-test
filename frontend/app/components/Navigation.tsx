@@ -24,6 +24,12 @@ export const Navigation: React.FC = () => {
                   Pokemon Search
                 </Link>
                 <Link
+                  href="/collection"
+                  className="text-sm font-medium text-gray-700 hover:text-gray-900"
+                >
+                  My Collection
+                </Link>
+                <Link
                   href="/bedrock"
                   className="text-sm font-medium text-gray-700 hover:text-gray-900"
                 >
