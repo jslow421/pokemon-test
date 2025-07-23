@@ -32,9 +32,9 @@ const (
 
 // Allowed image types
 var allowedTypes = map[string]bool{
-	mimeJPEG: true,
+	mimeJPEG:    true,
 	"image/jpg": true,
-	mimePNG:  true,
+	mimePNG:     true,
 }
 
 // PokifyHandler handles image upload and Pokemon character generation
@@ -137,7 +137,7 @@ func PokifyHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Pokify response sent: 200 OK")
 }
 
-// generatePokemonCharacter calls AWS Bedrock Titan Image Generator to generate a Pokemon character from the uploaded image
+// generatePokemonCharacter calls AWS Bedrock Nova Canvas to generate a Pokemon character from the uploaded image
 func generatePokemonCharacter(base64Image, mediaType string) (string, error) {
 	// Initialize AWS config
 	cfg, err := awsconfig.LoadDefaultConfig(context.TODO())
@@ -148,27 +148,27 @@ func generatePokemonCharacter(base64Image, mediaType string) (string, error) {
 	// Create Bedrock client
 	client := bedrockruntime.NewFromConfig(cfg)
 
-	// Get Titan Image Generator configuration
-	bedrockConfig := config.TitanImageConfig()
+	// Get Nova Canvas configuration
+	bedrockConfig := config.NovaCanvasConfig()
 
 	// Prepare the prompt for Pokemon character generation
-	prompt := "Create a new Pokemon character inspired by this image. The Pokemon should have the official Pokemon art style - clean, vibrant, cartoon-like with bold outlines. Make it look friendly and approachable. Include unique characteristics that reflect the image's appearance while maintaining the Pokemon aesthetic."
+	prompt := "Create a friendly Pokémon character inspired by the visual elements in this image. Use official Pokémon art style with: - Bright, vibrant colors from the source image - Cartoon-like features with bold outlines - Cute, approachable design - Fantasy creature characteristics - Clean, family-friendly appearance"
 
-	// Prepare the request for Titan Image Generator with conditioning image
+	// Prepare the request for Nova Canvas with conditioning image
 	bedrockReq := map[string]interface{}{
 		"taskType": "IMAGE_VARIATION",
 		"imageVariationParams": map[string]interface{}{
-			"text": prompt,
-			"images": []string{base64Image},
+			"text":               prompt,
+			"images":             []string{base64Image},
 			"similarityStrength": 0.7,
 		},
 		"imageGenerationConfig": map[string]interface{}{
-			"numberOfImages":   1,
-			"quality":          "premium",
-			"cfgScale":         8.0,
-			"height":           1024,
-			"width":            1024,
-			"seed":             0,
+			"numberOfImages": 1,
+			"quality":        "standard",
+			"cfgScale":       7.0,
+			"height":         1024,
+			"width":          1024,
+			"seed":           0,
 		},
 	}
 
@@ -177,7 +177,7 @@ func generatePokemonCharacter(base64Image, mediaType string) (string, error) {
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	log.Printf("Calling Bedrock Titan Image Generator with image variation request...")
+	log.Printf("Calling Bedrock Nova Canvas with image variation request...")
 
 	// Call Bedrock
 	output, err := client.InvokeModel(context.TODO(), &bedrockruntime.InvokeModelInput{
@@ -196,13 +196,13 @@ func generatePokemonCharacter(base64Image, mediaType string) (string, error) {
 		return "", fmt.Errorf("failed to parse Bedrock response: %w", err)
 	}
 
-	// Extract the generated image from Titan response
+	// Extract the generated image from Nova Canvas response
 	if images, ok := bedrockResp["images"].([]interface{}); ok && len(images) > 0 {
 		if imageData, ok := images[0].(string); ok {
-			log.Printf("Successfully generated Pokemon character image with Titan")
+			log.Printf("Successfully generated Pokemon character image with Nova Canvas")
 			return imageData, nil
 		}
 	}
 
-	return "", fmt.Errorf("no image found in Titan response")
+	return "", fmt.Errorf("no image found in Nova Canvas response")
 }

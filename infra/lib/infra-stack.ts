@@ -144,7 +144,7 @@ export class SlowikPokeInfraStack extends cdk.Stack {
               ],
               resources: [
                 "arn:aws:bedrock:*:*:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0",
-                "arn:aws:bedrock:*:*:foundation-model/amazon.titan-image-generator-v2:0",
+                "arn:aws:bedrock:*:*:foundation-model/amazon.nova-canvas-v1:0",
               ],
             }),
           ],

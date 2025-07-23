@@ -32,12 +32,12 @@ func DefaultBedrockConfig() BedrockConfig {
 	}
 }
 
-// TitanImageConfig returns the Bedrock configuration for Titan Image Generator
-func TitanImageConfig() BedrockConfig {
+// NovaCanvasConfig returns the Bedrock configuration for Nova Canvas
+func NovaCanvasConfig() BedrockConfig {
 	return BedrockConfig{
-		ModelID:          "amazon.titan-image-generator-v2:0",
-		AnthropicVersion: "", // Not used by Titan
-		MaxTokens:        0,  // Not used by Titan
+		ModelID:          "amazon.nova-canvas-v1:0",
+		AnthropicVersion: "", // Not used by Nova Canvas
+		MaxTokens:        0,  // Not used by Nova Canvas
 		ContentType:      "application/json",
 	}
 }
