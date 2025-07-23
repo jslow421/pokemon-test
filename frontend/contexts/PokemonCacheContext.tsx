@@ -25,6 +25,7 @@ export interface PokemonCacheContextType {
   isPokemonSaved: (pokemonId: number, category?: string) => boolean;
   addPokemonToCache: (pokemon: PokemonEntry) => void;
   removePokemonFromCache: (entryId: string) => void;
+  updatePokemonInCache: (entryId: string, updates: Partial<Pick<PokemonEntry, 'category' | 'notes'>>) => void;
   loadUserPokemon: () => Promise<void>;
   clearCache: () => void;
 }
@@ -82,6 +83,28 @@ export const PokemonCacheProvider: React.FC<PokemonCacheProviderProps> = ({ chil
         } else {
           newCache.set(pokemonId, filteredEntries);
         }
+      }
+      return newCache;
+    });
+  }, []);
+
+  const updatePokemonInCache = useCallback((entryId: string, updates: Partial<Pick<PokemonEntry, 'category' | 'notes'>>) => {
+    setCache(prev => {
+      const newCache = new Map(prev);
+      for (const [pokemonId, entries] of newCache.entries()) {
+        const updatedEntries = entries.map(entry => {
+          if (entry.entryId === entryId) {
+            const updatedEntry = { ...entry, ...updates };
+            // Update userCategory if category changed
+            if (updates.category) {
+              updatedEntry.userCategory = `USER#${entry.userId}#CATEGORY#${updates.category}`;
+            }
+            updatedEntry.updatedAt = new Date().toISOString();
+            return updatedEntry;
+          }
+          return entry;
+        });
+        newCache.set(pokemonId, updatedEntries);
       }
       return newCache;
     });
@@ -172,6 +195,7 @@ export const PokemonCacheProvider: React.FC<PokemonCacheProviderProps> = ({ chil
     isPokemonSaved,
     addPokemonToCache,
     removePokemonFromCache,
+    updatePokemonInCache,
     loadUserPokemon,
     clearCache,
   };

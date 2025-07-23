@@ -233,7 +233,10 @@ export default function PokemonPage() {
         spriteUrl: pokemon.sprites?.front_default || "",
       };
 
-      const result = await apiClient.post("/save-pokemon", saveData) as SavePokemonResponse;
+      const result = (await apiClient.post(
+        "/save-pokemon",
+        saveData
+      )) as SavePokemonResponse;
 
       if (!result.success) {
         throw new Error(result.error || "Failed to save Pokemon");

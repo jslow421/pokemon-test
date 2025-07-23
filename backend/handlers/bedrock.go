@@ -122,6 +122,3 @@ func BedrockHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Response sent: 200 OK")
 }
 
-func stringPtr(s string) *string {
-	return &s
-}

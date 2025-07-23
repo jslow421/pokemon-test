@@ -15,9 +15,11 @@ export default function CollectionPage() {
   const [filteredPokemon, setFilteredPokemon] = useState<PokemonEntry[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [error, setError] = useState('');
+  const [editingNote, setEditingNote] = useState<string | null>(null);
+  const [noteValue, setNoteValue] = useState('');
   const { apiClient, token } = useAuth();
   const isAuthenticated = !!token;
-  const { cache, isLoading, removePokemonFromCache } = usePokemonCache();
+  const { cache, isLoading, removePokemonFromCache, updatePokemonInCache } = usePokemonCache();
   const router = useRouter();
 
   const categories = [
@@ -72,6 +74,46 @@ export default function CollectionPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete Pokemon');
     }
+  };
+
+  const updatePokemon = async (entryId: string, updates: { category?: 'favorites' | 'caught' | 'wishlist'; notes?: string }) => {
+    if (!isAuthenticated) {
+      setError('Please login to update Pokemon');
+      return;
+    }
+
+    try {
+      const data = await apiClient.put<{ success: boolean; error?: string }>(`/update-pokemon/${entryId}`, updates);
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Update the Pokemon in cache
+      updatePokemonInCache(entryId, updates);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update Pokemon');
+    }
+  };
+
+  const handleCategoryChange = (entryId: string, newCategory: 'favorites' | 'caught' | 'wishlist') => {
+    updatePokemon(entryId, { category: newCategory });
+  };
+
+  const handleNoteEdit = (entryId: string, currentNote: string) => {
+    setEditingNote(entryId);
+    setNoteValue(currentNote);
+  };
+
+  const handleNoteSave = (entryId: string) => {
+    updatePokemon(entryId, { notes: noteValue });
+    setEditingNote(null);
+    setNoteValue('');
+  };
+
+  const handleNoteCancel = () => {
+    setEditingNote(null);
+    setNoteValue('');
   };
 
   const getTypeColor = (type: string) => {
@@ -218,6 +260,20 @@ export default function CollectionPage() {
                     </div>
                   </div>
 
+                  {/* Category Selector */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                    <select
+                      value={entry.category}
+                      onChange={(e) => handleCategoryChange(entry.entryId, e.target.value as 'favorites' | 'caught' | 'wishlist')}
+                      className="w-full px-3 py-1 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                    >
+                      <option value="favorites">⭐ Favorites</option>
+                      <option value="caught">🎯 Caught</option>
+                      <option value="wishlist">💭 Wishlist</option>
+                    </select>
+                  </div>
+
                   {/* Pokemon Image */}
                   {entry.spriteUrl && (
                     <div className="text-center mb-4">
@@ -242,13 +298,54 @@ export default function CollectionPage() {
                   </div>
 
                   {/* Notes */}
-                  {entry.notes && (
-                    <div className="mb-4">
-                      <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded italic">
-                        &ldquo;{entry.notes}&rdquo;
-                      </p>
+                  <div className="mb-4">
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-sm font-medium text-gray-700">Notes</label>
+                      {editingNote !== entry.entryId && (
+                        <button
+                          onClick={() => handleNoteEdit(entry.entryId, entry.notes || '')}
+                          className="text-blue-500 hover:text-blue-700 text-sm"
+                          title="Edit note"
+                        >
+                          ✏️ Edit
+                        </button>
+                      )}
                     </div>
-                  )}
+                    {editingNote === entry.entryId ? (
+                      <div className="space-y-2">
+                        <textarea
+                          value={noteValue}
+                          onChange={(e) => setNoteValue(e.target.value)}
+                          placeholder="Add a note about this Pokemon..."
+                          className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-white placeholder-gray-500"
+                          rows={3}
+                          autoFocus
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleNoteSave(entry.entryId)}
+                            className="px-3 py-1 bg-blue-500 text-white text-sm rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={handleNoteCancel}
+                            className="px-3 py-1 bg-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded min-h-[2.5rem] flex items-center">
+                        {entry.notes ? (
+                          <span className="italic">&ldquo;{entry.notes}&rdquo;</span>
+                        ) : (
+                          <span className="text-gray-500">No notes added</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Footer */}
                   <div className="text-xs text-gray-500 border-t pt-2">

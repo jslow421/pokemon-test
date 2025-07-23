@@ -47,6 +47,16 @@ type SavePokemonResponse struct {
 	Error   string `json:"error,omitempty"`
 }
 
+type UpdatePokemonRequest struct {
+	Category string `json:"category"`
+	Notes    string `json:"notes"`
+}
+
+type UpdatePokemonResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
 type GetPokemonCollectionResponse struct {
 	Pokemon []PokemonEntry `json:"pokemon,omitempty"`
 	Error   string         `json:"error,omitempty"`
@@ -408,6 +418,152 @@ func GetPokemonCollectionHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func UpdatePokemonHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Request received: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+
+	// Set CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "PUT, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodPut {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(UpdatePokemonResponse{Error: "Method not allowed"})
+		return
+	}
+
+	// Get the user from context (set by auth middleware)
+	user, ok := r.Context().Value(middleware.CognitoUserContextKey).(middleware.CognitoUser)
+	if !ok {
+		log.Printf("No user found in context")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(UpdatePokemonResponse{Error: "Authentication required"})
+		return
+	}
+
+	// Extract entryId from URL path
+	// Expected format: /update-pokemon/{entryId}
+	path := r.URL.Path
+	if len(path) < len("/update-pokemon/") {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(UpdatePokemonResponse{Error: "Entry ID required"})
+		return
+	}
+
+	entryId := path[len("/update-pokemon/"):]
+	if entryId == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(UpdatePokemonResponse{Error: "Entry ID required"})
+		return
+	}
+
+	var req UpdatePokemonRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Error decoding request body: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(UpdatePokemonResponse{Error: "Invalid request body"})
+		return
+	}
+
+	// Validate category if provided
+	if req.Category != "" {
+		validCategories := map[string]bool{
+			"favorites": true,
+			"caught":    true,
+			"wishlist":  true,
+		}
+		if !validCategories[req.Category] {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(UpdatePokemonResponse{Error: "Invalid category. Must be: favorites, caught, or wishlist"})
+			return
+		}
+	}
+
+	log.Printf("User %s updating Pokemon entry: %s", user.Username, entryId)
+
+	// Initialize AWS config
+	cfg, err := awsconfig.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		log.Printf("Error loading AWS config: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(UpdatePokemonResponse{Error: "Failed to load AWS config"})
+		return
+	}
+
+	// Create DynamoDB client
+	dynamoClient := dynamodb.NewFromConfig(cfg)
+	tableName := TableName
+
+	// Build the update expression dynamically
+	var updateExpression strings.Builder
+	var expressionAttributeNames map[string]string
+	var expressionAttributeValues map[string]types.AttributeValue
+
+	updateExpression.WriteString("SET ")
+	expressionAttributeNames = make(map[string]string)
+	expressionAttributeValues = make(map[string]types.AttributeValue)
+
+	var setParts []string
+
+	// Always update the updatedAt timestamp
+	setParts = append(setParts, "#updatedAt = :updatedAt")
+	expressionAttributeNames["#updatedAt"] = "updatedAt"
+	expressionAttributeValues[":updatedAt"] = &types.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)}
+
+	// Update category if provided
+	if req.Category != "" {
+		setParts = append(setParts, "#category = :category, #userCategory = :userCategory")
+		expressionAttributeNames["#category"] = "category"
+		expressionAttributeNames["#userCategory"] = "userCategory"
+		expressionAttributeValues[":category"] = &types.AttributeValueMemberS{Value: req.Category}
+		expressionAttributeValues[":userCategory"] = &types.AttributeValueMemberS{Value: fmt.Sprintf("USER#%s#CATEGORY#%s", user.Sub, req.Category)}
+	}
+
+	// Update notes (allow empty string to clear notes)
+	setParts = append(setParts, "#notes = :notes")
+	expressionAttributeNames["#notes"] = "notes"
+	expressionAttributeValues[":notes"] = &types.AttributeValueMemberS{Value: req.Notes}
+
+	updateExpression.WriteString(strings.Join(setParts, ", "))
+
+	// Update the item in DynamoDB
+	_, err = dynamoClient.UpdateItem(context.TODO(), &dynamodb.UpdateItemInput{
+		TableName: &tableName,
+		Key: map[string]types.AttributeValue{
+			"userId":  &types.AttributeValueMemberS{Value: user.Sub},
+			"entryId": &types.AttributeValueMemberS{Value: entryId},
+		},
+		UpdateExpression:          stringPtr(updateExpression.String()),
+		ExpressionAttributeNames:  expressionAttributeNames,
+		ExpressionAttributeValues: expressionAttributeValues,
+		ConditionExpression:       stringPtr("attribute_exists(userId) AND attribute_exists(entryId)"),
+	})
+
+	if err != nil {
+		log.Printf("Error updating DynamoDB: %v", err)
+		// Check if it's a condition failed error (entry doesn't exist)
+		if strings.Contains(err.Error(), "ConditionalCheckFailedException") {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(UpdatePokemonResponse{Error: "Pokemon entry not found"})
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(UpdatePokemonResponse{Error: "Failed to update Pokemon entry"})
+		}
+		return
+	}
+
+	log.Printf("Successfully updated Pokemon entry: %s for user: %s", entryId, user.Username)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(UpdatePokemonResponse{
+		Success: true,
+	})
+}
+
 func DeletePokemonHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Request received: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
 
@@ -725,5 +881,9 @@ func fetchPokemonData(pokemonName string) ([]byte, error) {
 // Helper functions
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+func stringPtr(s string) *string {
+	return &s
 }
 
