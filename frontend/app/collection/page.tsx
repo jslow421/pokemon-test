@@ -251,6 +251,15 @@ export default function CollectionPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-2xl">{getCategoryEmoji(entry.category)}</span>
                       <button
+                        onClick={() => {
+                          router.push(`/pokemon?search=${entry.pokemonId}`);
+                        }}
+                        className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 p-1 rounded transition-colors"
+                        title="View stats and details"
+                      >
+                        📊
+                      </button>
+                      <button
                         onClick={() => deletePokemon(entry.entryId, entry.pokemonName)}
                         className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-colors"
                         title="Remove from collection"

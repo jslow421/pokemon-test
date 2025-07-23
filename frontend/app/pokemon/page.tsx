@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import React, { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import React, { useState, useEffect } from "react";
 import { usePokemonCache } from "../../contexts/PokemonCacheContext";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -75,6 +75,42 @@ export default function PokemonPage() {
   const { token, apiClient } = useAuth();
   const { isPokemonSaved, addPokemonToCache } = usePokemonCache();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Handle automatic search when loading with search parameter
+  useEffect(() => {
+    const searchParam = searchParams.get('search');
+    if (searchParam && token && !pokemon && !isLoading) {
+      setSearchTerm(searchParam);
+      
+      // Trigger search automatically with the search parameter
+      const performAutoSearch = async () => {
+        setError("");
+        setPokemon(null);
+        setIsLoading(true);
+
+        try {
+          const data: PokemonResponse = await apiClient.get(
+            `/pokemon/${searchParam.toLowerCase().trim()}`
+          );
+
+          if (data.error) {
+            throw new Error(data.error);
+          }
+
+          if (data.data) {
+            setPokemon(data.data);
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "An error occurred");
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      
+      performAutoSearch();
+    }
+  }, [searchParams, token, pokemon, isLoading, apiClient]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
