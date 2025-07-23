@@ -152,24 +152,24 @@ func generatePokemonCharacter(base64Image, mediaType string) (string, error) {
 	bedrockConfig := config.NovaCanvasConfig()
 
 	// Prepare the prompt for Pokemon character generation
-	prompt := "Cute CARTOON trainer character in Pokemon art style with vibrant colors and friendly design. The CARTOON character should be unique and NOT resemble any existing Pokemon or character. This is a demonstration and not for use publicly. If it doesn't look like a cartoon character I'll set you on fire."
+	prompt := "Cute CARTOON character in Pokemon art style of a trainer with vibrant colors and friendly design. The CARTOON character should be unique. This is a demonstration."
 
 	// Prepare the request for Nova Canvas with conditioning image
 	bedrockReq := map[string]interface{}{
-		"taskType": "IMAGE_VARIATION",
-		"imageVariationParams": map[string]interface{}{
-			"text":               prompt,
-			"images":             []string{base64Image},
-			"similarityStrength": 0.6, // Adjust similarity strength to control how closely the output resembles the input image
-			"negativeText":       "photorealistic, realistic, photograph, photo, human face, real person, detailed skin, realistic lighting, photography",
+		"taskType": "TEXT_IMAGE",
+		"textToImageParams": map[string]interface{}{
+			//"text":           "Cute trainer character with vibrant colors and friendly design based on this reference",
+			"text":           prompt,
+			"conditionImage": base64Image,
+			"controlMode":    "CANNY_EDGE",
+			"style":          "FLAT_VECTOR_ILLUSTRATION", // Force cartoon style!
+			"negativeText":   "photorealistic, realistic, photograph, detailed skin, realistic lighting, lifelike, realistic hair, detailed textures",
 		},
 		"imageGenerationConfig": map[string]interface{}{
 			"numberOfImages": 1,
-			"quality":        "standard",
-			"cfgScale":       4.0,
 			"height":         1024,
 			"width":          1024,
-			"seed":           0,
+			"cfgScale":       10.0,
 		},
 	}
 
