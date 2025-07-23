@@ -50,6 +50,14 @@ export const Navigation: React.FC = () => {
                     Pokify
                   </Link>
                 )}
+                {featureFlags.battle && (
+                  <Link
+                    href="/battle"
+                    className="text-sm font-medium text-gray-700 hover:text-gray-900"
+                  >
+                    Battle Arena
+                  </Link>
+                )}
               </>
             )}
           </div>

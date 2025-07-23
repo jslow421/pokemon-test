@@ -3,6 +3,7 @@ export interface FeatureFlags {
   collection: boolean;
   bedrock: boolean;
   pokify: boolean;
+  battle: boolean;
 }
 
 export const defaultFeatureFlags: FeatureFlags = {
@@ -10,6 +11,7 @@ export const defaultFeatureFlags: FeatureFlags = {
   collection: true,
   bedrock: true,
   pokify: true,
+  battle: true,
 };
 
 // You can easily toggle features by changing these values
@@ -18,4 +20,5 @@ export const featureFlags: FeatureFlags = {
   collection: true,
   bedrock: false,
   pokify: true,
+  battle: true,
 };
