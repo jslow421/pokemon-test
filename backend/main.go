@@ -12,6 +12,7 @@ func main() {
 	// Public endpoints (no auth required)
 	http.HandleFunc("/", handlers.HelloHandler)
 	http.HandleFunc("/login", handlers.LoginHandler)
+	http.HandleFunc("/register", handlers.RegisterHandler)
 	
 	// Protected endpoints (Cognito auth required)
 	http.HandleFunc("/bedrock", middleware.CognitoAuthMiddleware(handlers.BedrockHandler))
