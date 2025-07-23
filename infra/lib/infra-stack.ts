@@ -1,10 +1,12 @@
 import * as cdk from "aws-cdk-lib";
 import * as cognito from "aws-cdk-lib/aws-cognito";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import { Construct } from "constructs";
 
 export class SlowikPokeInfraStack extends cdk.Stack {
   public readonly userPool: cognito.UserPool;
   public readonly userPoolClient: cognito.UserPoolClient;
+  public readonly pokemonTable: dynamodb.Table;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -79,6 +81,47 @@ export class SlowikPokeInfraStack extends cdk.Stack {
     new cdk.CfnOutput(this, "UserPoolProviderURL", {
       value: this.userPool.userPoolProviderUrl,
       description: "Cognito User Pool Provider URL (for JWT validation)",
+    });
+
+    // Create DynamoDB table for Pokemon entries
+    this.pokemonTable = new dynamodb.Table(this, "PokemonEntriesTable", {
+      tableName: "pokemon-entries",
+      partitionKey: {
+        name: "userId",
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: "entryId",
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development
+      pointInTimeRecovery: false, // Optional: disable for cost savings in dev
+    });
+
+    // Add Global Secondary Index for category-based queries
+    this.pokemonTable.addGlobalSecondaryIndex({
+      indexName: "CategoryIndex",
+      partitionKey: {
+        name: "userCategory",
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: "createdAt",
+        type: dynamodb.AttributeType.STRING,
+      },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    // Output the table name and ARN
+    new cdk.CfnOutput(this, "PokemonTableName", {
+      value: this.pokemonTable.tableName,
+      description: "Pokemon entries table name",
+    });
+
+    new cdk.CfnOutput(this, "PokemonTableArn", {
+      value: this.pokemonTable.tableArn,
+      description: "Pokemon entries table ARN",
     });
 
     cdk.Tags.of(this).add("Caylent:Owner", "john.slowik@caylent.com");
