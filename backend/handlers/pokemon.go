@@ -391,6 +391,89 @@ func GetPokemonCollectionHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func DeletePokemonHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Request received: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+
+	// Set CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodDelete {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(SavePokemonResponse{Error: "Method not allowed"})
+		return
+	}
+
+	// Get the user from context (set by auth middleware)
+	user, ok := r.Context().Value(middleware.CognitoUserContextKey).(middleware.CognitoUser)
+	if !ok {
+		log.Printf("No user found in context")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(SavePokemonResponse{Error: "Authentication required"})
+		return
+	}
+
+	// Extract entryId from URL path
+	// Expected format: /delete-pokemon/{entryId}
+	path := r.URL.Path
+	if len(path) < len("/delete-pokemon/") {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(SavePokemonResponse{Error: "Entry ID required"})
+		return
+	}
+
+	entryId := path[len("/delete-pokemon/"):]
+	if entryId == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(SavePokemonResponse{Error: "Entry ID required"})
+		return
+	}
+
+	log.Printf("User %s deleting Pokemon entry: %s", user.Username, entryId)
+
+	// Initialize AWS config
+	cfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		log.Printf("Error loading AWS config: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(SavePokemonResponse{Error: "Failed to load AWS config"})
+		return
+	}
+
+	// Create DynamoDB client
+	dynamoClient := dynamodb.NewFromConfig(cfg)
+	tableName := TableName
+
+	// Delete the item from DynamoDB
+	// Using userId and entryId as the composite key
+	_, err = dynamoClient.DeleteItem(context.TODO(), &dynamodb.DeleteItemInput{
+		TableName: &tableName,
+		Key: map[string]types.AttributeValue{
+			"userId":  &types.AttributeValueMemberS{Value: user.Sub},
+			"entryId": &types.AttributeValueMemberS{Value: entryId},
+		},
+	})
+
+	if err != nil {
+		log.Printf("Error deleting from DynamoDB: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(SavePokemonResponse{Error: "Failed to delete Pokemon entry"})
+		return
+	}
+
+	log.Printf("Successfully deleted Pokemon entry: %s for user: %s", entryId, user.Username)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(SavePokemonResponse{
+		Success: true,
+	})
+}
+
 // Helper functions
 func boolPtr(b bool) *bool {
 	return &b

@@ -84,6 +84,38 @@ export default function CollectionPage() {
     }
   };
 
+  const deletePokemon = async (entryId: string, pokemonName: string) => {
+    if (!token) {
+      setError('Please login to delete Pokemon');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to remove ${pokemonName} from your collection?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8181/delete-pokemon/${entryId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        throw new Error(data.error || 'Failed to delete Pokemon');
+      }
+
+      // Remove the Pokemon from local state
+      setPokemon(prev => prev.filter(p => p.entryId !== entryId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete Pokemon');
+    }
+  };
+
   const getTypeColor = (type: string) => {
     const colors: { [key: string]: string } = {
       normal: 'bg-gray-400',
@@ -208,7 +240,7 @@ export default function CollectionPage() {
             {filteredPokemon.map((entry) => (
               <div key={entry.entryId} className="bg-white shadow rounded-lg overflow-hidden">
                 <div className="p-6">
-                  {/* Header with category */}
+                  {/* Header with category and remove button */}
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <h3 className="text-lg font-bold text-gray-900 capitalize">
@@ -216,7 +248,16 @@ export default function CollectionPage() {
                       </h3>
                       <p className="text-sm text-gray-600">#{entry.pokemonId}</p>
                     </div>
-                    <span className="text-2xl">{getCategoryEmoji(entry.category)}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">{getCategoryEmoji(entry.category)}</span>
+                      <button
+                        onClick={() => deletePokemon(entry.entryId, entry.pokemonName)}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-colors"
+                        title="Remove from collection"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
 
                   {/* Pokemon Image */}
@@ -246,7 +287,7 @@ export default function CollectionPage() {
                   {entry.notes && (
                     <div className="mb-4">
                       <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded italic">
-                        "{entry.notes}"
+                        &ldquo;{entry.notes}&rdquo;
                       </p>
                     </div>
                   )}

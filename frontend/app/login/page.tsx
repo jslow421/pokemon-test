@@ -38,7 +38,7 @@ export default function LoginPage() {
             Create a user in Cognito User Pool: us-east-1_vbKOhRy1X
           </p>
           <p className="mt-1 text-center text-xs text-gray-500">
-            Or use any credentials you've created in the Cognito console
+            Or use any credentials you&apos;ve created in the Cognito console
           </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
