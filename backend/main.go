@@ -20,6 +20,7 @@ func main() {
 	http.HandleFunc("/save-pokemon", middleware.CognitoAuthMiddleware(handlers.SavePokemonHandler))
 	http.HandleFunc("/my-pokemon", middleware.CognitoAuthMiddleware(handlers.GetPokemonCollectionHandler))
 	http.HandleFunc("/delete-pokemon/", middleware.CognitoAuthMiddleware(handlers.DeletePokemonHandler))
+	http.HandleFunc("/pokify", middleware.CognitoAuthMiddleware(handlers.PokifyHandler))
 
 	log.Println("Server starting on port 8181...")
 	log.Println("Using hardcoded Cognito configuration for demo")
@@ -29,6 +30,7 @@ func main() {
 	log.Println("  POST /save-pokemon - Save Pokemon to collection (authenticated)")
 	log.Println("  GET /my-pokemon?category={category} - Get saved Pokemon (authenticated)")
 	log.Println("  DELETE /delete-pokemon/{entryId} - Delete Pokemon from collection (authenticated)")
+	log.Println("  POST /pokify - Transform photo into Pokemon character (authenticated)")
 	if err := http.ListenAndServe(":8181", nil); err != nil {
 		log.Fatal(err)
 	}
