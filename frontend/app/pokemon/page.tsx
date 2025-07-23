@@ -179,6 +179,11 @@ export default function PokemonPage() {
       if (result.pokeapi_data) {
         setPokemon(result.pokeapi_data);
       }
+      
+      // Also update the search term so user can see what was identified
+      if (result.pokemon_name && result.pokemon_name !== 'unknown') {
+        setSearchTerm(result.pokemon_name);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred during identification');
     } finally {
@@ -369,6 +374,30 @@ export default function PokemonPage() {
                     <p className="text-sm text-yellow-600 mt-2">
                       ⚠️ Low confidence - the image might not contain a clear Pokemon or might be hard to identify.
                     </p>
+                  )}
+                  {identificationResult.pokeapi_data && (
+                    <p className="text-sm text-green-600 mt-2">
+                      ✅ Pokemon data loaded! Scroll down to see stats and save to your collection.
+                    </p>
+                  )}
+                  {identificationResult.pokemon_name && 
+                   identificationResult.pokemon_name !== 'unknown' && 
+                   identificationResult.confidence >= 0.5 && 
+                   !identificationResult.pokeapi_data && (
+                    <div className="mt-3">
+                      <button
+                        onClick={async () => {
+                          setSearchTerm(identificationResult.pokemon_name);
+                          // Trigger search automatically
+                          const event = new Event('submit');
+                          Object.defineProperty(event, 'preventDefault', { value: () => {} });
+                          await handleSearch(event as any);
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        🔍 Search for {identificationResult.pokemon_name}
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
