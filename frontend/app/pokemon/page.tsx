@@ -40,6 +40,13 @@ interface PokemonResponse {
   error?: string;
 }
 
+interface PokemonIdentifyResponse {
+  pokemon_name: string;
+  confidence: number;
+  pokeapi_data?: PokemonData;
+  error?: string;
+}
+
 export default function PokemonPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [pokemon, setPokemon] = useState<PokemonData | null>(null);
@@ -49,6 +56,13 @@ export default function PokemonPage() {
   const [notes, setNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  
+  // Image upload states
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isIdentifying, setIsIdentifying] = useState(false);
+  const [identificationResult, setIdentificationResult] = useState<PokemonIdentifyResponse | null>(null);
+  
   const { token } = useAuth();
   const router = useRouter();
 
@@ -102,6 +116,80 @@ export default function PokemonPage() {
         console.error('Error playing Pokemon cry:', error);
       });
     }
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setError('Please select an image file');
+        return;
+      }
+      
+      // Validate file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Image too large (max 5MB)');
+        return;
+      }
+
+      setSelectedImage(file);
+      setError('');
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleImageIdentification = async () => {
+    if (!selectedImage || !token) {
+      setError('Please select an image and login first');
+      return;
+    }
+
+    setIsIdentifying(true);
+    setError('');
+    setIdentificationResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('image', selectedImage);
+
+      const response = await fetch('http://localhost:8181/pokemon-identify', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const result: PokemonIdentifyResponse = await response.json();
+
+      if (!response.ok || result.error) {
+        throw new Error(result.error || 'Failed to identify Pokemon');
+      }
+
+      setIdentificationResult(result);
+      
+      // If identification was successful and we have PokeAPI data, populate the pokemon state
+      if (result.pokeapi_data) {
+        setPokemon(result.pokeapi_data);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred during identification');
+    } finally {
+      setIsIdentifying(false);
+    }
+  };
+
+  const clearImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    setIdentificationResult(null);
   };
 
   const savePokemon = async () => {
@@ -183,15 +271,16 @@ export default function PokemonPage() {
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-4">
-            Pokemon Search
+            Pokemon Search & Identification
           </h1>
           <p className="text-gray-600">
-            Search for your favorite Pokemon by name or ID
+            Search for Pokemon by name/ID or upload an image to identify them
           </p>
         </div>
 
         {/* Search Form */}
         <div className="bg-white shadow rounded-lg p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">🔍 Search by Name or ID</h2>
           <form onSubmit={handleSearch} className="flex gap-4">
             <input
               type="text"
@@ -208,6 +297,83 @@ export default function PokemonPage() {
               {isLoading ? 'Searching...' : 'Search'}
             </button>
           </form>
+        </div>
+
+        {/* Image Upload Section */}
+        <div className="bg-white shadow rounded-lg p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">📸 Identify by Image</h2>
+          
+          {!imagePreview ? (
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+              <div className="space-y-4">
+                <div className="mx-auto w-12 h-12 text-gray-400">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 48 48" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" />
+                  </svg>
+                </div>
+                <div>
+                  <label htmlFor="pokemon-image" className="cursor-pointer">
+                    <span className="mt-2 block text-sm font-medium text-gray-900">
+                      Click to upload a Pokemon image
+                    </span>
+                    <span className="mt-1 block text-xs text-gray-500">
+                      PNG, JPG, WebP up to 5MB
+                    </span>
+                    <input
+                      id="pokemon-image"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageSelect}
+                      className="sr-only"
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="relative">
+                <img
+                  src={imagePreview}
+                  alt="Pokemon to identify"
+                  className="max-w-xs mx-auto rounded-lg shadow-md"
+                />
+                <button
+                  onClick={clearImage}
+                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                  ×
+                </button>
+              </div>
+              
+              <div className="text-center">
+                <button
+                  onClick={handleImageIdentification}
+                  disabled={isIdentifying}
+                  className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isIdentifying ? 'Identifying...' : 'Identify Pokemon'}
+                </button>
+              </div>
+              
+              {identificationResult && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="font-semibold text-gray-900 mb-2">Identification Result:</h3>
+                  <p className="text-sm text-gray-700">
+                    <span className="font-medium">Pokemon:</span> {identificationResult.pokemon_name}
+                  </p>
+                  <p className="text-sm text-gray-700">
+                    <span className="font-medium">Confidence:</span> {(identificationResult.confidence * 100).toFixed(1)}%
+                  </p>
+                  {identificationResult.confidence < 0.5 && (
+                    <p className="text-sm text-yellow-600 mt-2">
+                      ⚠️ Low confidence - the image might not contain a clear Pokemon or might be hard to identify.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Error Message */}

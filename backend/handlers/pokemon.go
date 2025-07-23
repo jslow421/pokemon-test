@@ -2,16 +2,19 @@ package handlers
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"backend/middleware"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
@@ -20,6 +23,7 @@ const (
 	PokeAPIBaseURL = "https://pokeapi.co/api/v2"
 	RequestTimeout = 10 * time.Second
 	TableName      = "pokemon-entries"
+	MaxImageSize   = 5 * 1024 * 1024 // 5MB
 )
 
 type PokemonResponse struct {
@@ -59,6 +63,18 @@ type PokemonEntry struct {
 	UserCategory string    `json:"userCategory" dynamodbav:"userCategory"`
 	CreatedAt    string    `json:"createdAt" dynamodbav:"createdAt"`
 	UpdatedAt    string    `json:"updatedAt" dynamodbav:"updatedAt"`
+}
+
+type PokemonIdentifyResponse struct {
+	PokemonName string          `json:"pokemon_name"`
+	Confidence  float64         `json:"confidence"`
+	PokeAPIData json.RawMessage `json:"pokeapi_data,omitempty"`
+	Error       string          `json:"error,omitempty"`
+}
+
+type BedrockIdentificationResult struct {
+	PokemonName string  `json:"pokemon_name"`
+	Confidence  float64 `json:"confidence"`
 }
 
 func PokemonHandler(w http.ResponseWriter, r *http.Request) {
@@ -474,7 +490,236 @@ func DeletePokemonHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func PokemonIdentifyHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Request received: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+
+	// Set CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(PokemonIdentifyResponse{Error: "Method not allowed"})
+		return
+	}
+
+	// Get the user from context (set by auth middleware)
+	user, ok := r.Context().Value(middleware.CognitoUserContextKey).(middleware.CognitoUser)
+	if !ok {
+		log.Printf("No user found in context")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(PokemonIdentifyResponse{Error: "Authentication required"})
+		return
+	}
+
+	// Parse multipart form
+	err := r.ParseMultipartForm(MaxImageSize)
+	if err != nil {
+		log.Printf("Error parsing multipart form: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(PokemonIdentifyResponse{Error: "Invalid form data"})
+		return
+	}
+
+	// Get the image file
+	file, header, err := r.FormFile("image")
+	if err != nil {
+		log.Printf("Error getting form file: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(PokemonIdentifyResponse{Error: "Image file required"})
+		return
+	}
+	defer file.Close()
+
+	// Validate file size
+	if header.Size > MaxImageSize {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(PokemonIdentifyResponse{Error: "Image too large (max 5MB)"})
+		return
+	}
+
+	// Validate file type
+	contentType := header.Header.Get("Content-Type")
+	if !strings.HasPrefix(contentType, "image/") {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(PokemonIdentifyResponse{Error: "File must be an image"})
+		return
+	}
+
+	// Read image data
+	imageData, err := io.ReadAll(file)
+	if err != nil {
+		log.Printf("Error reading image data: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(PokemonIdentifyResponse{Error: "Failed to read image"})
+		return
+	}
+
+	log.Printf("User %s uploading image for identification, size: %d bytes", user.Username, len(imageData))
+
+	// Identify Pokemon using Bedrock
+	pokemonName, confidence, err := identifyPokemon(imageData)
+	if err != nil {
+		log.Printf("Error identifying Pokemon: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(PokemonIdentifyResponse{Error: "Failed to identify Pokemon"})
+		return
+	}
+
+	response := PokemonIdentifyResponse{
+		PokemonName: pokemonName,
+		Confidence:  confidence,
+	}
+
+	// If confidence is high enough and we have a valid Pokemon name, fetch PokeAPI data
+	if confidence > 0.5 && pokemonName != "unknown" {
+		pokeAPIData, err := fetchPokemonData(pokemonName)
+		if err != nil {
+			log.Printf("Error fetching PokeAPI data for %s: %v", pokemonName, err)
+			// Don't fail the request, just return without PokeAPI data
+		} else {
+			response.PokeAPIData = json.RawMessage(pokeAPIData)
+		}
+	}
+
+	log.Printf("Successfully identified Pokemon: %s (confidence: %.2f)", pokemonName, confidence)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func identifyPokemon(imageBytes []byte) (string, float64, error) {
+	// Initialize AWS config
+	cfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	// Create Bedrock client
+	client := bedrockruntime.NewFromConfig(cfg)
+
+	// Convert image to base64
+	imageBase64 := base64.StdEncoding.EncodeToString(imageBytes)
+
+	// Prepare the request for Claude 3.5 Sonnet with vision
+	prompt := `Analyze this image and identify the Pokémon. Respond with JSON only:
+
+{
+  "pokemon_name": "exact_name_lowercase",
+  "confidence": 0.0-1.0
+}
+
+Rules:
+- Use exact PokéAPI names (e.g., "pikachu", "charizard")
+- If unsure or no Pokémon visible, use "unknown" and confidence < 0.5
+- Consider regional forms (e.g., "alolan-raichu")`
+
+	bedrockReq := map[string]interface{}{
+		"anthropic_version": "bedrock-2023-05-31",
+		"max_tokens":        1000,
+		"messages": []map[string]interface{}{
+			{
+				"role": "user",
+				"content": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": prompt,
+					},
+					{
+						"type": "image",
+						"source": map[string]interface{}{
+							"type":       "base64",
+							"media_type": "image/jpeg",
+							"data":       imageBase64,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	reqBody, err := json.Marshal(bedrockReq)
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Call Bedrock
+	output, err := client.InvokeModel(context.TODO(), &bedrockruntime.InvokeModelInput{
+		Body:        reqBody,
+		ModelId:     stringPtr("anthropic.claude-3-5-sonnet-20241022-v2:0"),
+		ContentType: stringPtr("application/json"),
+	})
+
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to call Bedrock: %w", err)
+	}
+
+	// Parse the response
+	var bedrockResp map[string]interface{}
+	if err := json.Unmarshal(output.Body, &bedrockResp); err != nil {
+		return "", 0, fmt.Errorf("failed to parse Bedrock response: %w", err)
+	}
+
+	// Extract the text response
+	var responseText string
+	if content, ok := bedrockResp["content"].([]interface{}); ok && len(content) > 0 {
+		if firstContent, ok := content[0].(map[string]interface{}); ok {
+			if text, ok := firstContent["text"].(string); ok {
+				responseText = text
+			}
+		}
+	}
+
+	if responseText == "" {
+		return "unknown", 0.0, nil
+	}
+
+	// Parse the JSON response from Claude
+	var result BedrockIdentificationResult
+	if err := json.Unmarshal([]byte(responseText), &result); err != nil {
+		log.Printf("Failed to parse Claude response as JSON: %v, response: %s", err, responseText)
+		return "unknown", 0.0, nil
+	}
+
+	return result.PokemonName, result.Confidence, nil
+}
+
+func fetchPokemonData(pokemonName string) ([]byte, error) {
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: RequestTimeout,
+	}
+
+	// Build PokeAPI URL
+	pokeAPIURL := fmt.Sprintf("%s/pokemon/%s", PokeAPIBaseURL, pokemonName)
+
+	// Make request to PokeAPI
+	resp, err := client.Get(pokeAPIURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch from PokeAPI: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("PokeAPI returned status %d", resp.StatusCode)
+	}
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read PokeAPI response: %w", err)
+	}
+
+	return body, nil
+}
+
 // Helper functions
 func boolPtr(b bool) *bool {
 	return &b
 }
+
