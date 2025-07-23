@@ -25,7 +25,7 @@ type BedrockConfig struct {
 // DefaultBedrockConfig returns the default Bedrock configuration
 func DefaultBedrockConfig() BedrockConfig {
 	return BedrockConfig{
-		ModelID:          "anthropic.claude-sonnet-4-20250514-v1:0",
+		ModelID:          "us.anthropic.claude-sonnet-4-20250514-v1:0",
 		AnthropicVersion: "bedrock-2023-05-31",
 		MaxTokens:        1000,
 		ContentType:      "application/json",
