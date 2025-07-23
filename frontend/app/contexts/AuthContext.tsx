@@ -1,7 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import ApiClient from '../lib/api-client';
 
 interface AuthContextType {
   token: string | null;
@@ -9,6 +10,7 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
+  apiClient: ApiClient;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -31,6 +33,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
+  const handleAuthError = useCallback(() => {
+    setToken(null);
+    setUser(null);
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
+    router.push('/login');
+  }, [router]);
+
+  const apiClient = new ApiClient({
+    baseURL: 'http://localhost:8181',
+    getAuthToken: () => token,
+    onAuthError: handleAuthError,
+  });
+
   useEffect(() => {
     // Check for existing token in sessionStorage on mount
     const storedToken = sessionStorage.getItem('token');
@@ -46,17 +62,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (username: string, password: string) => {
     try {
-      const response = await fetch('http://localhost:8181/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
-      });
+      const data = await apiClient.post('/login', { username, password });
 
-      const data = await response.json();
-
-      if (response.ok && data.token) {
+      if (data.token) {
         setToken(data.token);
         setUser({ username });
         
@@ -83,7 +91,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ token, user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ token, user, login, logout, isLoading, apiClient }}>
       {children}
     </AuthContext.Provider>
   );

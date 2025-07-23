@@ -9,7 +9,7 @@ export default function BedrockPage() {
   const [response, setResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const { token } = useAuth();
+  const { token, apiClient } = useAuth();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,19 +26,10 @@ export default function BedrockPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetch('http://localhost:8181/bedrock', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ message }),
-      });
+      const data = await apiClient.post('/bedrock', { message });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to get response');
+      if (data.error) {
+        throw new Error(data.error);
       }
 
       setResponse(data.response);

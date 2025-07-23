@@ -64,7 +64,7 @@ export default function PokemonPage() {
   const [identificationResult, setIdentificationResult] = useState<PokemonIdentifyResponse | null>(null);
   const [imageSearchCollapsed, setImageSearchCollapsed] = useState(false);
   
-  const { token } = useAuth();
+  const { token, apiClient } = useAuth();
   const router = useRouter();
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -86,18 +86,10 @@ export default function PokemonPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`http://localhost:8181/pokemon/${searchTerm.toLowerCase().trim()}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const data: PokemonResponse = await apiClient.get(`/pokemon/${searchTerm.toLowerCase().trim()}`);
 
-      const data: PokemonResponse = await response.json();
-
-      if (!response.ok || data.error) {
-        throw new Error(data.error || 'Failed to fetch Pokemon data');
+      if (data.error) {
+        throw new Error(data.error);
       }
 
       if (data.data) {
@@ -161,18 +153,10 @@ export default function PokemonPage() {
       const formData = new FormData();
       formData.append('image', selectedImage);
 
-      const response = await fetch('http://localhost:8181/pokemon-identify', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
+      const result: PokemonIdentifyResponse = await apiClient.post('/pokemon-identify', formData);
 
-      const result: PokemonIdentifyResponse = await response.json();
-
-      if (!response.ok || result.error) {
-        throw new Error(result.error || 'Failed to identify Pokemon');
+      if (result.error) {
+        throw new Error(result.error);
       }
 
       setIdentificationResult(result);
@@ -192,7 +176,7 @@ export default function PokemonPage() {
         // Trigger search automatically
         const event = new Event('submit');
         Object.defineProperty(event, 'preventDefault', { value: () => {} });
-        await handleSearch(event as any);
+        await handleSearch(event as React.FormEvent);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred during identification');
@@ -226,18 +210,9 @@ export default function PokemonPage() {
         spriteUrl: pokemon.sprites?.front_default || '',
       };
 
-      const response = await fetch('http://localhost:8181/save-pokemon', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(saveData),
-      });
+      const result = await apiClient.post('/save-pokemon', saveData);
 
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
+      if (!result.success) {
         throw new Error(result.error || 'Failed to save Pokemon');
       }
 
@@ -417,7 +392,7 @@ export default function PokemonPage() {
                           // Trigger search automatically
                           const event = new Event('submit');
                           Object.defineProperty(event, 'preventDefault', { value: () => {} });
-                          await handleSearch(event as any);
+                          await handleSearch(event as React.FormEvent);
                         }}
                         className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                       >

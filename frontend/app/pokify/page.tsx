@@ -11,7 +11,7 @@ interface PokifyResponse {
 type ProcessingState = 'idle' | 'uploading' | 'processing' | 'complete' | 'error';
 
 export default function PokifyPage() {
-  const { token } = useAuth();
+  const { token, apiClient } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [processingState, setProcessingState] = useState<ProcessingState>('idle');
@@ -103,17 +103,9 @@ export default function PokifyPage() {
 
       setProcessingState('processing');
 
-      const response = await fetch('http://localhost:8181/pokify', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
+      const data: PokifyResponse = await apiClient.post('/pokify', formData);
 
-      const data: PokifyResponse = await response.json();
-
-      if (response.ok && data.pokemon_image) {
+      if (data.pokemon_image) {
         setGeneratedImage(data.pokemon_image);
         setProcessingState('complete');
       } else {

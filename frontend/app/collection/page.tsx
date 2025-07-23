@@ -23,6 +23,11 @@ interface CollectionResponse {
   error?: string;
 }
 
+interface DeleteResponse {
+  success?: boolean;
+  error?: string;
+}
+
 export default function CollectionPage() {
   const [pokemon, setPokemon] = useState<PokemonEntry[]>([]);
   const [filteredPokemon, setFilteredPokemon] = useState<PokemonEntry[]>([]);
@@ -41,6 +46,7 @@ export default function CollectionPage() {
 
   useEffect(() => {
     fetchPokemon();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   useEffect(() => {
@@ -95,18 +101,10 @@ export default function CollectionPage() {
     }
 
     try {
-      const response = await fetch(`http://localhost:8181/delete-pokemon/${entryId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const data = await apiClient.delete<DeleteResponse>(`/delete-pokemon/${entryId}`);
 
-      const data = await response.json();
-
-      if (!response.ok || data.error) {
-        throw new Error(data.error || 'Failed to delete Pokemon');
+      if (data.error) {
+        throw new Error(data.error);
       }
 
       // Remove the Pokemon from local state
