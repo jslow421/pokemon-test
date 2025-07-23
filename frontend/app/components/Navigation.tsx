@@ -16,12 +16,20 @@ export const Navigation: React.FC = () => {
               Pokemon AI
             </Link>
             {user && (
-              <Link
-                href="/bedrock"
-                className="text-sm font-medium text-gray-700 hover:text-gray-900"
-              >
-                Test Bedrock
-              </Link>
+              <>
+                <Link
+                  href="/pokemon"
+                  className="text-sm font-medium text-gray-700 hover:text-gray-900"
+                >
+                  Pokemon Search
+                </Link>
+                <Link
+                  href="/bedrock"
+                  className="text-sm font-medium text-gray-700 hover:text-gray-900"
+                >
+                  Test Bedrock
+                </Link>
+              </>
             )}
           </div>
           
