@@ -52,11 +52,11 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For demo purposes, accept any username/password
-	// In production, validate against a database
-	if req.Username == "" || req.Password == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(LoginResponse{Error: "Username and password required"})
+	// Hard-coded credentials for demo
+	// In production, validate against a database with hashed passwords
+	if req.Username != "testuser" || req.Password != "testpass" {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(LoginResponse{Error: "Invalid username or password"})
 		return
 	}
 
