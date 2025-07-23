@@ -26,13 +26,13 @@ export default function BedrockPage() {
     setIsLoading(true);
 
     try {
-      const data = await apiClient.post('/bedrock', { message });
+      const data = await apiClient.post('/bedrock', { message }) as { response?: string; error?: string };
 
       if (data.error) {
         throw new Error(data.error);
       }
 
-      setResponse(data.response);
+      setResponse(data.response || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {

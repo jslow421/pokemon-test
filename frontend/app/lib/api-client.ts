@@ -37,8 +37,8 @@ class ApiClient {
   }
 
   private getHeaders(additionalHeaders?: HeadersInit): HeadersInit {
-    const headers: HeadersInit = {
-      ...additionalHeaders,
+    const headers: Record<string, string> = {
+      ...(additionalHeaders as Record<string, string>),
     };
 
     const token = this.getAuthToken?.();
@@ -60,7 +60,7 @@ class ApiClient {
 
   async post<T>(endpoint: string, data?: unknown, options?: RequestInit): Promise<T> {
     const isFormData = data instanceof FormData;
-    const headers = this.getHeaders(options?.headers);
+    const headers = this.getHeaders(options?.headers) as Record<string, string>;
     
     if (!isFormData && data) {
       headers['Content-Type'] = 'application/json';

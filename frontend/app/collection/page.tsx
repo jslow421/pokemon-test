@@ -2,26 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { usePokemonCache, PokemonEntry } from '../../contexts/PokemonCacheContext';
 import { useRouter } from 'next/navigation';
 
-interface PokemonEntry {
-  userId: string;
-  entryId: string;
-  pokemonName: string;
-  pokemonId: number;
-  category: string;
-  notes: string;
-  types: string[];
-  spriteUrl: string;
-  userCategory: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface CollectionResponse {
-  pokemon?: PokemonEntry[];
-  error?: string;
-}
 
 interface DeleteResponse {
   success?: boolean;
@@ -29,12 +12,12 @@ interface DeleteResponse {
 }
 
 export default function CollectionPage() {
-  const [pokemon, setPokemon] = useState<PokemonEntry[]>([]);
   const [filteredPokemon, setFilteredPokemon] = useState<PokemonEntry[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const { token } = useAuth();
+  const { apiClient, token } = useAuth();
+  const isAuthenticated = !!token;
+  const { cache, isLoading, removePokemonFromCache } = usePokemonCache();
   const router = useRouter();
 
   const categories = [
@@ -45,53 +28,30 @@ export default function CollectionPage() {
   ];
 
   useEffect(() => {
-    fetchPokemon();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
-
-  useEffect(() => {
-    if (selectedCategory === 'all') {
-      setFilteredPokemon(pokemon);
-    } else {
-      setFilteredPokemon(pokemon.filter(p => p.category === selectedCategory));
-    }
-  }, [pokemon, selectedCategory]);
-
-  const fetchPokemon = async () => {
-    if (!token) {
+    if (!isAuthenticated) {
       setError('Please login to view your collection');
       router.push('/login');
       return;
     }
-
-    setIsLoading(true);
     setError('');
+  }, [isAuthenticated, router]);
 
-    try {
-      const response = await fetch('http://localhost:8181/my-pokemon', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data: CollectionResponse = await response.json();
-
-      if (!response.ok || data.error) {
-        throw new Error(data.error || 'Failed to fetch Pokemon collection');
-      }
-
-      setPokemon(data.pokemon || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setIsLoading(false);
+  useEffect(() => {
+    // Get all Pokemon from cache inside the effect
+    const allPokemon = Array.from(cache.values()).flat();
+    
+    if (selectedCategory === 'all') {
+      setFilteredPokemon(allPokemon);
+    } else {
+      setFilteredPokemon(allPokemon.filter(p => p.category === selectedCategory));
     }
-  };
+  }, [cache, selectedCategory]);
+
+  // Get all Pokemon for display counts (this doesn't trigger effects)
+  const pokemon = Array.from(cache.values()).flat();
 
   const deletePokemon = async (entryId: string, pokemonName: string) => {
-    if (!token) {
+    if (!isAuthenticated) {
       setError('Please login to delete Pokemon');
       return;
     }
@@ -107,8 +67,8 @@ export default function CollectionPage() {
         throw new Error(data.error);
       }
 
-      // Remove the Pokemon from local state
-      setPokemon(prev => prev.filter(p => p.entryId !== entryId));
+      // Remove the Pokemon from cache
+      removePokemonFromCache(entryId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete Pokemon');
     }

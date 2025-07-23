@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./contexts/AuthContext";
+import { PokemonCacheProvider } from "../contexts/PokemonCacheContext";
 import { Navigation } from "./components/Navigation";
 
 const geistSans = Geist({
@@ -30,10 +31,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AuthProvider>
-          <Navigation />
-          <main className="pt-16">
-            {children}
-          </main>
+          <PokemonCacheProvider>
+            <Navigation />
+            <main className="pt-16">
+              {children}
+            </main>
+          </PokemonCacheProvider>
         </AuthProvider>
       </body>
     </html>
