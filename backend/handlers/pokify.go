@@ -152,7 +152,7 @@ func generatePokemonCharacter(base64Image, mediaType string) (string, error) {
 	bedrockConfig := config.NovaCanvasConfig()
 
 	// Prepare the prompt for Pokemon character generation
-	prompt := "Create a friendly Pokémon character inspired by the visual elements in this image. Use official Pokémon art style with: - Bright, vibrant colors from the source image - Cartoon-like features with bold outlines - Cute, approachable design - Fantasy creature characteristics - Clean, family-friendly appearance"
+	prompt := "Cute CARTOON trainer character in Pokemon art style with vibrant colors and friendly design. The CARTOON character should be unique and NOT resemble any existing Pokemon or character. This is a demonstration and not for use publicly. If it doesn't look like a cartoon character I'll set you on fire."
 
 	// Prepare the request for Nova Canvas with conditioning image
 	bedrockReq := map[string]interface{}{
@@ -160,12 +160,13 @@ func generatePokemonCharacter(base64Image, mediaType string) (string, error) {
 		"imageVariationParams": map[string]interface{}{
 			"text":               prompt,
 			"images":             []string{base64Image},
-			"similarityStrength": 0.7,
+			"similarityStrength": 0.6, // Adjust similarity strength to control how closely the output resembles the input image
+			"negativeText":       "photorealistic, realistic, photograph, photo, human face, real person, detailed skin, realistic lighting, photography",
 		},
 		"imageGenerationConfig": map[string]interface{}{
 			"numberOfImages": 1,
 			"quality":        "standard",
-			"cfgScale":       7.0,
+			"cfgScale":       4.0,
 			"height":         1024,
 			"width":          1024,
 			"seed":           0,
@@ -177,7 +178,9 @@ func generatePokemonCharacter(base64Image, mediaType string) (string, error) {
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	log.Printf("Calling Bedrock Nova Canvas with image variation request...")
+	log.Printf("Calling Bedrock Nova Canvas with request - Model: %s, Body size: %d bytes", bedrockConfig.ModelID, len(reqBody))
+	log.Printf("Request payload structure: taskType=%s, prompt length=%d, image data length=%d",
+		bedrockReq["taskType"], len(prompt), len(base64Image))
 
 	// Call Bedrock
 	output, err := client.InvokeModel(context.TODO(), &bedrockruntime.InvokeModelInput{
@@ -187,22 +190,54 @@ func generatePokemonCharacter(base64Image, mediaType string) (string, error) {
 	})
 
 	if err != nil {
+		log.Printf("Bedrock API call failed: %v", err)
 		return "", fmt.Errorf("failed to call Bedrock: %w", err)
 	}
+
+	log.Printf("Bedrock API call successful - Response body size: %d bytes", len(output.Body))
 
 	// Parse the response
 	var bedrockResp map[string]interface{}
 	if err := json.Unmarshal(output.Body, &bedrockResp); err != nil {
+		log.Printf("Failed to parse Bedrock response. Raw response: %s", string(output.Body))
 		return "", fmt.Errorf("failed to parse Bedrock response: %w", err)
 	}
 
+	// Log the full response structure for debugging
+	//responseJSON, _ := json.MarshalIndent(bedrockResp, "", "  ")
+	//log.Printf("Nova Canvas response structure: %s", string(responseJSON))
+
 	// Extract the generated image from Nova Canvas response
-	if images, ok := bedrockResp["images"].([]interface{}); ok && len(images) > 0 {
-		if imageData, ok := images[0].(string); ok {
-			log.Printf("Successfully generated Pokemon character image with Nova Canvas")
-			return imageData, nil
+	if images, ok := bedrockResp["images"].([]interface{}); ok {
+		log.Printf("Found 'images' array with %d items", len(images))
+		if len(images) > 0 {
+			if imageData, ok := images[0].(string); ok {
+				log.Printf("Successfully extracted image data (length: %d characters)", len(imageData))
+				return imageData, nil
+			} else {
+				log.Printf("First image item is not a string, type: %T, value: %v", images[0], images[0])
+			}
+		} else {
+			log.Printf("Images array is empty")
 		}
+	} else {
+		log.Printf("No 'images' key found in response or it's not an array")
+		// Check what keys are actually in the response
+		keys := make([]string, 0, len(bedrockResp))
+		for k := range bedrockResp {
+			keys = append(keys, k)
+		}
+		log.Printf("Available response keys: %v", keys)
 	}
 
-	return "", fmt.Errorf("no image found in Nova Canvas response")
+	// Check for common error fields
+	if errorMsg, ok := bedrockResp["error"].(string); ok {
+		log.Printf("Nova Canvas returned error: %s", errorMsg)
+		return "", fmt.Errorf("Nova Canvas error: %s", errorMsg)
+	}
+	if message, ok := bedrockResp["message"].(string); ok {
+		log.Printf("Nova Canvas returned message: %s", message)
+	}
+
+	return "", fmt.Errorf("no image found in Nova Canvas response - check logs for response structure")
 }
