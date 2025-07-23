@@ -1,8 +1,9 @@
-'use client';
+"use client";
 
-import React from 'react';
-import Link from 'next/link';
-import { useAuth } from '../contexts/AuthContext';
+import Link from "next/link";
+import React from "react";
+import { useAuth } from "../contexts/AuthContext";
+import { featureFlags } from "../config/featureFlags";
 
 export const Navigation: React.FC = () => {
   const { user, logout } = useAuth();
@@ -17,28 +18,34 @@ export const Navigation: React.FC = () => {
             </Link>
             {user && (
               <>
-                <Link
-                  href="/pokemon"
-                  className="text-sm font-medium text-gray-700 hover:text-gray-900"
-                >
-                  Pokemon Search
-                </Link>
-                <Link
-                  href="/collection"
-                  className="text-sm font-medium text-gray-700 hover:text-gray-900"
-                >
-                  My Collection
-                </Link>
-                <Link
-                  href="/bedrock"
-                  className="text-sm font-medium text-gray-700 hover:text-gray-900"
-                >
-                  Test Bedrock
-                </Link>
+                {featureFlags.pokemonSearch && (
+                  <Link
+                    href="/pokemon"
+                    className="text-sm font-medium text-gray-700 hover:text-gray-900"
+                  >
+                    Pokemon Search
+                  </Link>
+                )}
+                {featureFlags.collection && (
+                  <Link
+                    href="/collection"
+                    className="text-sm font-medium text-gray-700 hover:text-gray-900"
+                  >
+                    My Collection
+                  </Link>
+                )}
+                {featureFlags.bedrock && (
+                  <Link
+                    href="/bedrock"
+                    className="text-sm font-medium text-gray-700 hover:text-gray-900"
+                  >
+                    Test Bedrock
+                  </Link>
+                )}
               </>
             )}
           </div>
-          
+
           <div className="flex items-center space-x-4">
             {user ? (
               <>
