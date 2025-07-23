@@ -45,6 +45,10 @@ export default function PokemonPage() {
   const [pokemon, setPokemon] = useState<PokemonData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('favorites');
+  const [notes, setNotes] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
   const { token } = useAuth();
   const router = useRouter();
 
@@ -97,6 +101,49 @@ export default function PokemonPage() {
       audio.play().catch(error => {
         console.error('Error playing Pokemon cry:', error);
       });
+    }
+  };
+
+  const savePokemon = async () => {
+    if (!pokemon || !token) {
+      setSaveMessage('Please login and search for a Pokemon first');
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveMessage('');
+
+    try {
+      const saveData = {
+        pokemonName: pokemon.name,
+        pokemonId: pokemon.id,
+        category: selectedCategory,
+        notes: notes,
+        types: pokemon.types?.map(t => t.type.name) || [],
+        spriteUrl: pokemon.sprites?.front_default || '',
+      };
+
+      const response = await fetch('http://localhost:8181/save-pokemon', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(saveData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to save Pokemon');
+      }
+
+      setSaveMessage(`✅ ${pokemon.name} saved to ${selectedCategory}!`);
+      setNotes(''); // Clear notes after successful save
+    } catch (err) {
+      setSaveMessage(`❌ ${err instanceof Error ? err.message : 'Failed to save Pokemon'}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -206,11 +253,66 @@ export default function PokemonPage() {
                 {pokemon.cries?.latest && (
                   <button
                     onClick={playCry}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 mb-4"
                   >
                     🔊 Play Cry
                   </button>
                 )}
+
+                {/* Save to Collection Section */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="text-lg font-bold text-gray-900 mb-3">Save to Collection</h3>
+                  
+                  {/* Category Selection */}
+                  <div className="mb-3">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Category
+                    </label>
+                    <select
+                      value={selectedCategory}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    >
+                      <option value="favorites">⭐ Favorites</option>
+                      <option value="caught">🎯 Caught</option>
+                      <option value="wishlist">💭 Wishlist</option>
+                    </select>
+                  </div>
+
+                  {/* Notes */}
+                  <div className="mb-3">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Notes (optional)
+                    </label>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Add your notes about this Pokemon..."
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500 resize-none"
+                    />
+                  </div>
+
+                  {/* Save Button */}
+                  <button
+                    onClick={savePokemon}
+                    disabled={isSaving}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSaving ? 'Saving...' : `Save to ${selectedCategory}`}
+                  </button>
+
+                  {/* Save Message */}
+                  {saveMessage && (
+                    <div className={`mt-3 p-2 rounded text-sm ${
+                      saveMessage.includes('✅') 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {saveMessage}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Right Column - Stats and Details */}
