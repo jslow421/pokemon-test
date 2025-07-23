@@ -62,6 +62,7 @@ export default function PokemonPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [identificationResult, setIdentificationResult] = useState<PokemonIdentifyResponse | null>(null);
+  const [imageSearchCollapsed, setImageSearchCollapsed] = useState(false);
   
   const { token } = useAuth();
   const router = useRouter();
@@ -135,6 +136,7 @@ export default function PokemonPage() {
 
       setSelectedImage(file);
       setError('');
+      setImageSearchCollapsed(false);
       
       // Create preview
       const reader = new FileReader();
@@ -178,11 +180,19 @@ export default function PokemonPage() {
       // If identification was successful and we have PokeAPI data, populate the pokemon state
       if (result.pokeapi_data) {
         setPokemon(result.pokeapi_data);
-      }
-      
-      // Also update the search term so user can see what was identified
-      if (result.pokemon_name && result.pokemon_name !== 'unknown') {
+        // Collapse the image search box
+        setImageSearchCollapsed(true);
+        clearImage();
+      } else if (result.pokemon_name && result.pokemon_name !== 'unknown' && result.confidence >= 0.5) {
+        // Update search term and automatically trigger search
         setSearchTerm(result.pokemon_name);
+        // Collapse the image search box
+        setImageSearchCollapsed(true);
+        clearImage();
+        // Trigger search automatically
+        const event = new Event('submit');
+        Object.defineProperty(event, 'preventDefault', { value: () => {} });
+        await handleSearch(event as any);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred during identification');
@@ -306,9 +316,25 @@ export default function PokemonPage() {
 
         {/* Image Upload Section */}
         <div className="bg-white shadow rounded-lg p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">📸 Identify by Image</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">📸 Identify by Image</h2>
+            {imageSearchCollapsed && (
+              <button
+                onClick={() => setImageSearchCollapsed(false)}
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Upload another image
+              </button>
+            )}
+          </div>
           
-          {!imagePreview ? (
+          {imageSearchCollapsed ? (
+            <div className="bg-green-50 border border-green-200 rounded-md p-3">
+              <p className="text-green-800 text-sm">
+                ✅ Image identified successfully! Pokemon data is shown below.
+              </p>
+            </div>
+          ) : !imagePreview ? (
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
               <div className="space-y-4">
                 <div className="mx-auto w-12 h-12 text-gray-400">
