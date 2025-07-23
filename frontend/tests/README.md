@@ -47,12 +47,15 @@ npx playwright test --project=chromium
 ## Test Features
 
 ### Authentication Mocking
-Tests mock authentication by setting localStorage tokens:
+Tests mock authentication using a helper function to avoid localStorage security issues:
 ```typescript
-await page.evaluate(() => {
-  localStorage.setItem('authToken', 'mock-token');
-});
+import { mockAuthentication } from './helpers/auth';
+
+// In your test
+await mockAuthentication(page);
 ```
+
+The helper uses `page.addInitScript()` to set localStorage before page load, avoiding security restrictions.
 
 ### API Response Mocking
 Tests use Playwright's route interception to mock API responses:
@@ -143,3 +146,29 @@ The tests are configured to:
 3. Use `--headed` mode to see browser interactions
 4. Check the trace files for failed tests
 5. Use `console.log()` in page.evaluate() for debugging client-side code
+
+## Troubleshooting
+
+### localStorage Security Errors
+If you see "Access is denied for this document" errors:
+- Use the `mockAuthentication()` helper instead of direct `page.evaluate()`
+- Ensure the page is loaded before setting localStorage
+- Use `page.addInitScript()` for code that needs to run before page load
+
+### Test Failures
+- **Rate limiting test fails**: Check that mock API routes are set up correctly
+- **Authentication redirects**: Ensure `mockAuthentication()` is called before navigation
+- **Element not found**: Add proper waits with `page.waitForSelector()` or `expect().toBeVisible()`
+- **API mocks not working**: Verify route patterns match your actual API endpoints
+
+### Running Individual Tests
+```bash
+# Run a specific test file
+npx playwright test basic.spec.ts
+
+# Run a specific test by name
+npx playwright test --grep "should handle API rate limiting"
+
+# Run tests and keep browser open for debugging
+npx playwright test --headed --debug
+```

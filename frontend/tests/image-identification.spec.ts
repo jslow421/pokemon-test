@@ -1,14 +1,12 @@
 import { test, expect } from '@playwright/test';
+import { mockAuthentication } from './helpers/auth';
 import path from 'path';
 
 test.describe('Image Identification', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/pokemon');
-    
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
+    await page.goto('/pokemon');
   });
 
   test('should display image upload section', async ({ page }) => {

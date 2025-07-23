@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { mockAuthentication } from './helpers/auth';
 
 test.describe('Navigation and Layout', () => {
   test('should display home page correctly', async ({ page }) => {
@@ -52,9 +53,7 @@ test.describe('Navigation and Layout', () => {
 
   test('should maintain state across navigation', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     await page.goto('/pokemon');
     

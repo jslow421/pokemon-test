@@ -1,11 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { mockAuthentication } from './helpers/auth';
 
 test.describe('API Integration', () => {
   test.beforeEach(async ({ page }) => {
     // Mock authentication for all tests
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
   });
 
   test('should handle API rate limiting gracefully', async ({ page }) => {

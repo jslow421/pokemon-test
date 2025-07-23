@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { mockAuthentication } from './helpers/auth';
 
 test.describe('Accessibility', () => {
   test('should have proper page titles', async ({ page }) => {
@@ -25,9 +26,7 @@ test.describe('Accessibility', () => {
 
   test('should have alt text for images', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     await page.goto('/pokemon');
 
@@ -132,9 +131,7 @@ test.describe('Accessibility', () => {
 
   test('should handle focus management in modals/dialogs', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     await page.goto('/collection');
     

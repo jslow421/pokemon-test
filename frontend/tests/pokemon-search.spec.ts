@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { mockAuthentication } from './helpers/auth';
 
 test.describe('Pokemon Search', () => {
   test.beforeEach(async ({ page }) => {
@@ -32,9 +33,7 @@ test.describe('Pokemon Search', () => {
 
   test('should display loading state during search', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     await page.fill('input[placeholder*="Enter Pokemon name or ID"]', 'pikachu');
     
@@ -71,9 +70,7 @@ test.describe('Pokemon Search', () => {
 
   test('should display Pokemon details after successful search', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     // Mock API response
     await page.route('**/pokemon/pikachu', async route => {
@@ -115,9 +112,7 @@ test.describe('Pokemon Search', () => {
 
   test('should handle search errors gracefully', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     // Mock API error response
     await page.route('**/pokemon/invalidpokemon', async route => {
@@ -136,9 +131,7 @@ test.describe('Pokemon Search', () => {
 
   test('should allow saving Pokemon to collection', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     // Mock Pokemon search response
     await page.route('**/pokemon/pikachu', async route => {

@@ -1,9 +1,15 @@
 import { test, expect } from '@playwright/test';
+import { mockAuthentication } from './helpers/auth';
 
 test.describe('Authentication', () => {
   test.beforeEach(async ({ page }) => {
-    // Clear localStorage before each test
-    await page.evaluate(() => localStorage.clear());
+    // Navigate to establish context first
+    await page.goto('/');
+    // Clear authentication before each test
+    await page.evaluate(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+    });
   });
 
   test('should display login page', async ({ page }) => {
@@ -32,9 +38,7 @@ test.describe('Authentication', () => {
 
   test('should allow access to protected pages when authenticated', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     await page.goto('/pokemon');
     
@@ -45,9 +49,7 @@ test.describe('Authentication', () => {
 
   test('should maintain authentication state across page reloads', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     await page.goto('/pokemon');
     await expect(page).toHaveURL(/\/pokemon/);
@@ -62,8 +64,9 @@ test.describe('Authentication', () => {
 
   test('should handle authentication errors gracefully', async ({ page }) => {
     // Mock authentication with invalid token
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'invalid-token');
+    await page.goto('/');
+    await page.addInitScript(() => {
+      window.localStorage.setItem('authToken', 'invalid-token');
     });
 
     // Mock API calls to return 401 errors
@@ -86,9 +89,7 @@ test.describe('Authentication', () => {
 
   test('should log out user and redirect appropriately', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     await page.goto('/pokemon');
     

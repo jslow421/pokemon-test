@@ -10,6 +10,10 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:3001',
     trace: 'on-first-retry',
+    // Allow localStorage access
+    permissions: ['clipboard-read', 'clipboard-write'],
+    // Set user agent to avoid security restrictions
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
   },
 
   projects: [

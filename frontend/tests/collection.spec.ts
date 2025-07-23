@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { mockAuthentication } from './helpers/auth';
 
 test.describe('Pokemon Collection', () => {
   test.beforeEach(async ({ page }) => {
@@ -23,9 +24,7 @@ test.describe('Pokemon Collection', () => {
 
   test('should display empty state when no Pokemon saved', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     await page.reload();
 
@@ -42,9 +41,7 @@ test.describe('Pokemon Collection', () => {
 
   test('should display Pokemon cards with collection data', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     // Mock collection data in localStorage/context
     await page.evaluate(() => {
@@ -81,9 +78,7 @@ test.describe('Pokemon Collection', () => {
 
   test('should filter Pokemon by category', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     // Mock collection data with multiple categories
     await page.evaluate(() => {
@@ -138,9 +133,7 @@ test.describe('Pokemon Collection', () => {
 
   test('should allow editing Pokemon category', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     // Mock collection data
     await page.evaluate(() => {
@@ -181,9 +174,7 @@ test.describe('Pokemon Collection', () => {
 
   test('should allow editing Pokemon notes', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     // Mock collection data
     await page.evaluate(() => {
@@ -234,9 +225,7 @@ test.describe('Pokemon Collection', () => {
 
   test('should allow canceling note edits', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     // Mock collection data
     await page.evaluate(() => {
@@ -274,9 +263,7 @@ test.describe('Pokemon Collection', () => {
 
   test('should allow deleting Pokemon from collection', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     // Mock collection data
     await page.evaluate(() => {
@@ -319,9 +306,7 @@ test.describe('Pokemon Collection', () => {
 
   test('should navigate to Pokemon details from collection', async ({ page }) => {
     // Mock authentication
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-token');
-    });
+    await mockAuthentication(page);
 
     // Mock collection data
     await page.evaluate(() => {
