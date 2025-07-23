@@ -35,7 +35,10 @@ export default function LoginPage() {
             Sign in to your account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Demo credentials: testuser / testpass
+            Create a user in Cognito User Pool: us-east-1_vbKOhRy1X
+          </p>
+          <p className="mt-1 text-center text-xs text-gray-500">
+            Or use any credentials you've created in the Cognito console
           </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
