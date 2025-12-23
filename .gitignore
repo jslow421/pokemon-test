@@ -21,3 +21,5 @@ frontend/test-results/
 .idea/
 
 backend/.DS_Store
+
+.DS_Store
