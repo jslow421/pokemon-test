@@ -17,3 +17,7 @@
 frontend/playwright-report/
 
 frontend/test-results/
+
+.idea/
+
+backend/.DS_Store

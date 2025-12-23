@@ -26,7 +26,7 @@ A demo application that interfaces with the Pokemon API and AWS services to perf
 
 ```bash
 cd backend
-go run .
+go run main.go
 ```
 
 The backend will start on port 8181.
